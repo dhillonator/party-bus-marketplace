@@ -1,0 +1,182 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User/Customer model
+model Customer {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  phone         String
+  createdAt     DateTime @default(now())
+  
+  bookings      Booking[]
+  quoteRequests QuoteRequest[]
+}
+
+// Operator (Party Bus Company)
+model Operator {
+  id          String   @id @default(cuid())
+  companyName String
+  email       String   @unique
+  phone       String
+  city        String   // Vancouver, Surrey, Richmond, etc.
+  isApproved  Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  
+  buses       Bus[]
+  bookings    Booking[]
+  quotes      Quote[]
+}
+
+// Bus/Vehicle
+model Bus {
+  id           String   @id @default(cuid())
+  operatorId   String
+  operator     Operator @relation(fields: [operatorId], references: [id])
+  
+  name         String   // "24 Passenger Party Bus"
+  capacity     Int
+  hourlyRate   Float
+  minimumHours Int      @default(4)
+  description  String?
+  features     String[] // ["LED Lights", "Sound System", "Bar"]
+  isActive     Boolean  @default(true)
+  
+  bookings     Booking[]
+  quotes       Quote[]
+  availability BusAvailability[]
+  createdAt    DateTime @default(now())
+}
+
+// Booking (Confirmed Rides)
+model Booking {
+  id         String   @id @default(cuid())
+  
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
+  
+  busId      String
+  bus        Bus      @relation(fields: [busId], references: [id])
+  
+  operatorId String
+  operator   Operator @relation(fields: [operatorId], references: [id])
+  
+  // Trip details
+  date       DateTime
+  startTime  String   // "7:00 PM"
+  hours      Int
+  
+  pickupLocation  String
+  dropoffLocation String
+  
+  // Round trip details
+  isRoundTrip        Boolean  @default(false)
+  returnPickup       String?
+  returnDestination  String?
+  returnDate         DateTime?
+  returnTime         String?
+  
+  totalPrice      Float
+  depositAmount   Float
+  
+  status     String   @default("pending") // pending, confirmed, completed, cancelled
+  
+  // Damage protection
+  preRidePhotos  String[]
+  postRidePhotos String[]
+  
+  // Stop requests
+  stopRequests   StopRequest[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Quote Request (Customer asking for prices)
+model QuoteRequest {
+  id              String   @id @default(cuid())
+  customerId      String
+  customer        Customer @relation(fields: [customerId], references: [id])
+  
+  // Trip details
+  pickup          String
+  destination     String
+  date            DateTime
+  startTime       String
+  hours           Int
+  passengers      Int
+  
+  // Round trip details
+  isRoundTrip     Boolean  @default(false)
+  returnPickup    String?
+  returnDestination String?
+  returnDate      DateTime?
+  returnTime      String?
+  
+  // Request metadata
+  notes           String?
+  status          String   @default("active") // active, expired, booked
+  
+  createdAt       DateTime @default(now())
+  
+  quotes          Quote[]
+}
+
+// Quote (Operator's response to quote request)
+model Quote {
+  id              String   @id @default(cuid())
+  requestId       String
+  request         QuoteRequest @relation(fields: [requestId], references: [id])
+  
+  operatorId      String
+  operator        Operator @relation(fields: [operatorId], references: [id])
+  
+  busId           String
+  bus             Bus      @relation(fields: [busId], references: [id])
+  
+  // Pricing
+  totalPrice      Float
+  notes           String?  // Operator can explain what's included
+  
+  validUntil      DateTime // Quote expires
+  status          String   @default("pending") // pending, accepted, declined
+  
+  createdAt       DateTime @default(now())
+}
+
+// Stop Request (Mid-trip stop additions)
+model StopRequest {
+  id               String   @id @default(cuid())
+  bookingId        String
+  booking          Booking  @relation(fields: [bookingId], references: [id])
+  
+  address          String
+  requestedAt      DateTime @default(now())
+  estimatedMinutes Int
+  additionalCost   Float
+  
+  status           String   // pending, approved, denied
+  driverResponse   DateTime?
+  driverNotes      String?
+  
+  createdAt        DateTime @default(now())
+}
+
+// Bus Availability (for calendar blocking)
+model BusAvailability {
+  id          String    @id @default(cuid())
+  busId       String
+  bus         Bus       @relation(fields: [busId], references: [id])
+  
+  date        DateTime
+  isAvailable Boolean   @default(true)
+  notes       String?   // "Maintenance", "Already booked", etc.
+  
+  createdAt   DateTime  @default(now())
+}
